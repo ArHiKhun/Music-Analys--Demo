@@ -1,10 +1,9 @@
 import streamlit as st
 import pandas as pd
 import re
-import base64
 
 # Konfigurasi halaman
-st.set_page_config(page_title="Auto Lyric Analyzer", page_icon="🎵", layout="wide")
+st.set_page_config(page_title="Lyric Emotion Analyzer", page_icon="🎵", layout="wide")
 
 # Custom CSS
 st.markdown("""
@@ -23,12 +22,19 @@ st.markdown("""
         font-weight: bold;
         font-size: 16px;
     }
-    .music-player {
-        background: white;
-        padding: 20px;
-        border-radius: 10px;
+    .info-box {
+        background: rgba(255,255,255,0.9);
+        padding: 15px;
+        border-radius: 8px;
         margin: 10px 0;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        border-left: 5px solid #667eea;
+    }
+    .warning-box {
+        background: #FFF3CD;
+        padding: 15px;
+        border-radius: 8px;
+        margin: 10px 0;
+        border-left: 5px solid #FFC107;
     }
     .lyric-box {
         background: rgba(255,255,255,0.95);
@@ -41,76 +47,46 @@ st.markdown("""
         line-height: 1.8;
         border-left: 5px solid #667eea;
     }
-    .song-card {
-        background: white;
-        padding: 15px;
-        border-radius: 8px;
-        margin: 10px 0;
-        cursor: pointer;
-        transition: transform 0.2s;
-    }
-    .song-card:hover {
-        transform: scale(1.02);
-        box-shadow: 0 4px 8px rgba(0,0,0,0.2);
-    }
-    .emotion-badge {
-        display: inline-block;
-        padding: 5px 15px;
-        border-radius: 20px;
-        font-weight: bold;
-        margin: 5px;
-    }
     </style>
     """, unsafe_allow_html=True)
 
 # Judul
-st.title("🎵 Auto Lyric Emotion Analyzer")
-st.markdown("### Pilih Lagu → Lirik Otomatis Muncul → Analisis Emosi")
+st.title("🎵 Lyric Emotion Analyzer")
+st.markdown("### Analisis Emosi dari Lirik Lagu Pop Indonesia")
 st.markdown("---")
 
-# Lexicon Emosi (Bahasa Indonesia)
+# ⚠️ DISCLAIMER TEKNIS
+st.markdown("""
+<div class="warning-box">
+<b>⚠️ CATATAN TEKNIS:</b><br>
+File audio (MP3/WAV) tidak menyimpan lirik dalam file. 
+Untuk analisis ini, <b>lirik perlu diinput manual</b> atau dipilih dari sample.
+<br><br>
+<i>Future Work: Integrasi Speech-to-Text API untuk auto-extract lirik dari audio</i>
+</div>
+""", unsafe_allow_html=True)
+
+# Lexicon Emosi
 @st.cache_data
 def load_emotion_lexicon():
     lexicon = {
-        'sedih': [
-            'sedih', 'sedihnya', 'tangis', 'menangis', 'nangis', 'pilus', 
-            'haru', 'sendu', 'duka', 'nestapa', 'galau', 'patah', 'hancur', 'luka',
-            'pergi', 'tinggal', 'kehilangan', 'kalah', 'gagal', 'putus', 'cerai',
-            'sendiri', 'sepi', 'sunyi', 'kesepian', 'merana', 'sakit', 'perih',
-            'air mata', 'airmata', 'ratap', 'keluh', 'derita', 'siksa'
-        ],
-        'bahagia': [
-            'bahagia', 'senang', 'gembira', 'suka', 'ceria', 'riang', 'happy',
-            'senyum', 'tersenyum', 'tawa', 'tertawa', 'ketawa', 'bangga', 'puas',
-            'cinta', 'kasih', 'sayang', 'rindu', 'kangen', 'indah', 'manis',
-            'sempurna', 'beruntung', 'bersyukur', 'damai', 'tenang', 'nyaman',
-            'bersama', 'peluk', 'cium', 'dekapan', 'hangat', 'merona'
-        ],
-        'marah': [
-            'marah', 'marahnya', 'marahi', 'benci', 'bencinya', 'dendam', 'kesal',
-            'jengkel', 'geram', 'murka', 'nafsu', 'gila', 'ganas', 'buas',
-            'sakit hati', 'balas', 'hancurkan', 'binasakan', 'lenyap',
-            'kacau', 'berantakan', 'rusak', 'hancur'
-        ],
-        'rindu': [
-            'rindu', 'rinduku', 'kangen', 'kangennya', 'kangenmu',
-            'ingat', 'teringat', 'kenang', 'kenangan', 'masa lalu', 'dulu',
-            'jauh', 'jauhnya', 'pisahnya', 'berpisah', 'jarak', 'waktu',
-            'tunggu', 'menunggu', 'harap', 'harapan', 'doa',
-            'bayang', 'bayangan', 'mimpi', 'impian', 'khayal'
-        ],
-        'kecewa': [
-            'kecewa', 'kecewanya', 'kecewaku', 'kecewamu',
-            'khayal', 'khayalan', 'bohong', 'bohongi', 'tipu', 'tipu daya',
-            'janji', 'ingkar', 'khianat', 'selingkuh', 'dusta', 'palsu',
-            'sia-sia', 'sia sia', 'percuma', 'gagal', 'hilang', 'lenyap'
-        ]
+        'sedih': ['sedih', 'tangis', 'menangis', 'nangis', 'haru', 'sendu', 'duka', 
+                  'galau', 'patah', 'hancur', 'luka', 'pergi', 'tinggal', 'kehilangan',
+                  'sendiri', 'sepi', 'sunyi', 'sakit', 'perih', 'air mata', 'derita'],
+        'bahagia': ['bahagia', 'senang', 'gembira', 'suka', 'ceria', 'senyum', 'tawa',
+                    'cinta', 'kasih', 'sayang', 'indah', 'sempurna', 'bersyukur', 'damai'],
+        'marah': ['marah', 'benci', 'dendam', 'kesal', 'jengkel', 'geram', 'gila',
+                  'hancurkan', 'kacau', 'rusak'],
+        'rindu': ['rindu', 'kangen', 'ingat', 'kenang', 'kenangan', 'jauh', 'tunggu',
+                  'menunggu', 'harap', 'harapan', 'doa', 'bayang', 'mimpi'],
+        'kecewa': ['kecewa', 'bohong', 'tipu', 'janji', 'ingkar', 'khianat', 'dusta',
+                   'sia-sia', 'percuma', 'gagal', 'hilang']
     }
     return lexicon
 
 emotion_lexicon = load_emotion_lexicon()
 
-# Fungsi analisis emosi
+# Fungsi analisis
 def analyze_emotion(lyrics, lexicon):
     lyrics_lower = lyrics.lower()
     lyrics_clean = re.sub(r'[^\w\s]', ' ', lyrics_lower)
@@ -155,104 +131,33 @@ def analyze_emotion(lyrics, lexicon):
         'found_words': emotion_words_found
     }
 
-# DATABASE LAGU SAMPLE (Bundling: Judul + Lirik + Info Emosi + Audio Reference)
+# Database Sample Lagu
 @st.cache_data
 def load_song_database():
     songs = {
-        "🎵 Sample 1: Hati Yang Luka (Melankolis)": {
+        "🎵 Sample 1: Hati Yang Luka (Sedih)": {
             'lyrics': """Kau pergi tinggalkan aku
 Sendiri di sini menunggu
 Air mata jatuh membasahi
-Hatiku hancur kau sakiti
-
-Mengapa kau pergi tanpa pamit
-Tinggalkan aku yang mencintai
-Kini hanya sepi yang ada
-Dalam hatiku yang terluka
-
-Kini ku belajar ikhlas
-Melepaskan semua kenangan
-Meski sakit yang ku rasa
-Ku coba untuk bertahan""",
-            'emotion_hint': 'sedih',
-            'emotion_color': '#FF6B6B',
-            'tempo': 'Lambat',
-            'year': '2024',
-            'audio_note': '🎹 Piano & Strings'
+Hatiku hancur kau sakiti""",
+            'emotion': 'sedih',
+            'artist': 'Sample Artist'
         },
         "🎵 Sample 2: Cinta Sempurna (Bahagia)": {
             'lyrics': """Bersamamu ku merasa bahagia
 Bersamamu ku merasa lengkap
 Kau adalah segalanya bagiku
-Cinta yang slalu ada untukku
-
-Senyummu maniskan hariku
-Tawamu hiburkan jiwaku
-Bersyukur ku padamu
-Cinta sempurna dari tuhan
-
-Tak ada yang bisa pisahkan
-Kita berdua selamanya
-Kau dan aku satu jiwa
-Dalam cinta yang nyata""",
-            'emotion_hint': 'bahagia',
-            'emotion_color': '#4ECDC4',
-            'tempo': 'Sedang',
-            'year': '2024',
-            'audio_note': '🎸 Acoustic Guitar'
+Cinta yang slalu ada untukku""",
+            'emotion': 'bahagia',
+            'artist': 'Sample Artist'
         },
         "🎵 Sample 3: Menunggu Kamu (Rindu)": {
             'lyrics': """Ku menunggu kamu di sini
 Di tempat yang sama kita dulu
 Ku berharap kamu kembali
-Untuk melengkapi hatiku
-
-Waktu terus berlalu pergi
-Namun cintaku tetap di sini
-Menunggu kamu yang tak pasti
-Rindu ini tak pernah berakhir
-
-Setiap malam ku bermimpi
-Tentang dirimu yang jauh
-Kapan kita bertemu lagi
-Menghapus semua rindu""",
-            'emotion_hint': 'rindu',
-            'emotion_color': '#95E1D3',
-            'tempo': 'Lambat',
-            'year': '2024',
-            'audio_note': '🎹 Piano Ballad'
-        },
-        "🎵 Sample 4: Pengkhianatan (Kecewa)": {
-            'lyrics': """Janji yang kau ucapkan dulu
-Kini tinggal kenangan saja
-Kau ingkari semua kata
-Tinggalkan aku yang percaya
-
-Sakit hati yang ku rasa
-Saat kau bersamanya
-Khianat yang kau berikan
-Hancurkan semua harapan""",
-            'emotion_hint': 'kecewa',
-            'emotion_color': '#F38181',
-            'tempo': 'Sedang',
-            'year': '2024',
-            'audio_note': '🎸 Electric Guitar'
-        },
-        "🎵 Sample 5: Semangat Baru (Marah/Motivasi)": {
-            'lyrics': """Ku tak akan menyerah lagi
-Meski dunia melawan aku
-Akan ku buktikan pada semua
-Bahwa ku bisa meraih mimpi
-
-Bakar semua keraguan
-Hancurkan semua batasan
-Ku akan bangkit kembali
-Lebih kuat dari sebelumnya""",
-            'emotion_hint': 'marah',
-            'emotion_color': '#AA96DA',
-            'tempo': 'Cepat',
-            'year': '2024',
-            'audio_note': '🥁 Rock Drums'
+Untuk melengkapi hatiku""",
+            'emotion': 'rindu',
+            'artist': 'Sample Artist'
         }
     }
     return songs
@@ -270,16 +175,16 @@ if 'hasil' not in st.session_state:
     st.session_state.hasil = None
 
 # Sidebar - Audio Options
-st.sidebar.header("🔊 Audio Playback")
+st.sidebar.header("🔊 Audio Playback (Opsional)")
 
 audio_mode = st.sidebar.radio(
     "Pilih Mode Audio:",
-    ["📀 Sample Audio Info", "📤 Upload File Sendiri", "📺 YouTube Link"]
+    ["📤 Upload File Sendiri", "📺 YouTube Link", "⏭️ Skip Audio"]
 )
 
 if audio_mode == "📤 Upload File Sendiri":
     uploaded_file = st.sidebar.file_uploader(
-        "Upload file musik (MP3, WAV, M4A):",
+        "Upload file musik (MP3, WAV):",
         type=['mp3', 'wav', 'm4a', 'ogg']
     )
     if uploaded_file:
@@ -294,126 +199,73 @@ elif audio_mode == "📺 YouTube Link":
         placeholder="https://www.youtube.com/watch?v=..."
     )
     st.session_state.youtube_url = youtube_url if youtube_url else None
-    if youtube_url:
-        st.sidebar.success("✅ Link tersimpan")
 
-# Main Content - Song Selection
-st.markdown("### 🎤 Pilih Lagu untuk Dianalisis")
-st.markdown("*Lirik akan otomatis muncul saat lagu dipilih*")
+# Main Content - Input Method
+st.markdown("### 📝 Input Lirik Lagu")
 
-selected_song = st.selectbox(
-    "Pilih dari Database Lagu:",
-    list(song_database.keys()),
-    key="song_selector"
+input_method = st.radio(
+    "Pilih Metode Input:",
+    ["📚 Pilih dari Sample Database", "✏️ Input Lirik Manual"]
 )
 
-# Auto-load lirik saat lagu dipilih
-if selected_song:
-    song_data = song_database[selected_song]
-    st.session_state.selected_song = selected_song
-    st.session_state.current_lyrics = song_data['lyrics']
-    st.session_state.current_hint = song_data['emotion_hint']
-    st.session_state.current_color = song_data['emotion_color']
-    st.session_state.current_tempo = song_data['tempo']
-    st.session_state.current_year = song_data['year']
-    st.session_state.current_audio_note = song_data['audio_note']
-    st.session_state.analyzed = False  # Reset analisis saat ganti lagu
-    st.session_state.hasil = None
+if input_method == "📚 Pilih dari Sample Database":
+    selected_song = st.selectbox(
+        "Pilih Lagu Sample:",
+        list(song_database.keys())
+    )
+    
+    if selected_song:
+        song_data = song_database[selected_song]
+        st.session_state.current_lyrics = song_data['lyrics']
+        st.session_state.selected_song = selected_song
+        st.session_state.current_emotion = song_data['emotion']
+        
+elif input_method == "✏️ Input Lirik Manual":
+    st.session_state.current_lyrics = st.text_area(
+        "Paste lirik lagu di sini:",
+        height=200,
+        placeholder="Contoh: Kau pergi tinggalkan aku..."
+    )
+    st.session_state.selected_song = "Custom Input"
+    st.session_state.current_emotion = None
 
-# Tampilkan Info Lagu & Lirik
+# Tampilkan Lirik
 if st.session_state.current_lyrics:
-    song_data = song_database[st.session_state.selected_song]
-    
     st.markdown("---")
-    
-    # Info Card
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        st.markdown(f"""
-        <div class="song-card">
-        <b>🎭 Emosi</b><br>
-        <span class="emotion-badge" style="background: {song_data['emotion_color']}">
-        {song_data['emotion_hint'].upper()}
-        </span>
-        </div>
-        """, unsafe_allow_html=True)
-    with col2:
-        st.markdown(f"""
-        <div class="song-card">
-        <b>🎵 Tempo</b><br>
-        {song_data['tempo']}
-        </div>
-        """, unsafe_allow_html=True)
-    with col3:
-        st.markdown(f"""
-        <div class="song-card">
-        <b>📅 Tahun</b><br>
-        {song_data['year']}
-        </div>
-        """, unsafe_allow_html=True)
-    with col4:
-        st.markdown(f"""
-        <div class="song-card">
-        <b>🎹 Instrumen</b><br>
-        {song_data['audio_note']}
-        </div>
-        """, unsafe_allow_html=True)
-    
-    # Lirik Box
-    st.markdown("### 📝 Lirik Lagu")
+    st.markdown("### 🎤 Lirik yang Akan Dianalisis")
     st.markdown(f"""
     <div class="lyric-box">
     {st.session_state.current_lyrics}
     </div>
     """, unsafe_allow_html=True)
     
-    # Audio Player Section
-    st.markdown("### 🔊 Audio Playback")
+    # Audio Player (Optional)
+    st.markdown("### 🔊 Audio Playback (Opsional)")
     
-    if audio_mode == "📀 Sample Audio Info":
-        st.info(f"""
-        🎵 **{st.session_state.selected_song}**
+    if audio_mode == "📤 Upload File Sendiri" and st.session_state.get('uploaded_file'):
+        st.audio(st.session_state.uploaded_file, format='audio/mp3')
+        st.info("🎵 Putar musik sambil melihat analisis lirik")
         
-        **Catatan Audio:** {st.session_state.current_audio_note}
-        
-        💡 *Untuk demo ini, silakan upload file musik Anda sendiri atau gunakan YouTube link untuk mendengarkan sambil melihat analisis lirik.*
-        
-        **Alternatif:** Cari lagu dengan mood serupa di YouTube Music / Spotify
-        """)
-        
-    elif audio_mode == "📤 Upload File Sendiri":
-        if st.session_state.get('uploaded_file'):
-            st.audio(st.session_state.uploaded_file, format='audio/mp3')
-            st.success("🎵 File musik sedang diputar")
-        else:
-            st.warning("⚠️ Upload file musik di sidebar terlebih dahulu")
-            
-    elif audio_mode == "📺 YouTube Link":
-        if st.session_state.get('youtube_url'):
-            url = st.session_state.youtube_url
-            if 'youtube.com' in url or 'youtu.be' in url:
-                st.markdown(f"""
-                <div class="music-player">
-                <h4>📺 YouTube Player</h4>
-                <p>🔗 <a href="{url}" target="_blank">Klik untuk buka di YouTube</a></p>
-                <p><i>Dengarkan musik di tab baru sambil melihat analisis di sini</i></p>
-                </div>
-                """, unsafe_allow_html=True)
-            else:
-                st.warning("⚠️ Link YouTube tidak valid")
-        else:
-            st.warning("⚠️ Masukkan link YouTube di sidebar terlebih dahulu")
+    elif audio_mode == "📺 YouTube Link" and st.session_state.get('youtube_url'):
+        url = st.session_state.youtube_url
+        if 'youtube.com' in url or 'youtu.be' in url:
+            st.markdown(f"""
+            <div class="info-box">
+            📺 <a href="{url}" target="_blank">Klik untuk buka YouTube</a>
+            <br><i>Dengarkan di tab baru sambil melihat analisis</i>
+            </div>
+            """, unsafe_allow_html=True)
     
     # Tombol Analisis
     st.markdown("---")
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        if st.button("🔍 ANALISIS EMOSI LIRIK", use_container_width=True, type="primary"):
+        if st.button("🔍 ANALISIS EMOSI", use_container_width=True, type="primary"):
             hasil = analyze_emotion(st.session_state.current_lyrics, emotion_lexicon)
             st.session_state.analyzed = True
             st.session_state.hasil = hasil
 
-# Tampilkan Hasil Analisis
+# Tampilkan Hasil
 if st.session_state.analyzed and st.session_state.hasil:
     hasil = st.session_state.hasil
     
@@ -430,7 +282,6 @@ if st.session_state.analyzed and st.session_state.hasil:
         'Netral/Tidak Terdeteksi': '😐'
     }
     
-    # Metric Cards
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
@@ -450,21 +301,16 @@ if st.session_state.analyzed and st.session_state.hasil:
         coverage = round((hasil['matched_words'] / hasil['total_words']) * 100, 1) if hasil['total_words'] > 0 else 0
         st.metric("Coverage Lexicon", f"{coverage}%")
     
-    st.markdown("---")
-    
-    # Bar Chart
+    # Grafik
     st.markdown("### 📈 Distribusi Emosi")
-    
     df_emosi = pd.DataFrame({
         'Emosi': list(hasil['percentage'].keys()),
         'Persentase': list(hasil['percentage'].values())
     })
-    
     st.bar_chart(df_emosi.set_index('Emosi'), use_container_width=True)
     
     # Progress Bars
-    st.markdown("### 📊 Detail Skor Emosi")
-    
+    st.markdown("### 📊 Detail Skor")
     for emosi, persentase in sorted(hasil['percentage'].items(), key=lambda x: x[1], reverse=True):
         emoji = emotion_emoji.get(emosi, '😐')
         st.markdown(f"**{emoji} {emosi.capitalize()}: {persentase}%**")
@@ -472,54 +318,35 @@ if st.session_state.analyzed and st.session_state.hasil:
     
     # Kata Kunci
     st.markdown("---")
-    st.markdown("### 🔑 Kata Kunci Emosi yang Ditemukan")
-    
+    st.markdown("### 🔑 Kata Kunci Ditemukan")
     for emosi, words in hasil['found_words'].items():
         if words:
             with st.expander(f"{emotion_emoji.get(emosi, '😐')} {emosi.capitalize()} ({len(words)} kata)"):
-                st.write(f"**Kata ditemukan:** {', '.join(words)}")
+                st.write(f"**Kata:** {', '.join(words)}")
     
-    # Interpretasi
-    st.markdown("---")
-    st.markdown("### 💡 Interpretasi Hasil")
-    
-    interpretasi = {
-        'sedih': "🎵 **Nuansa:** MELANKOLIS | Cocok untuk: Refleksi, melepaskan kesedihan, momen galau",
-        'bahagia': "🎵 **Nuansa:** POSITIF & CERIA | Cocok untuk: Meningkatkan mood, semangat, perayaan",
-        'marah': "🎵 **Nuansa:** AGRESIF/MOTIVASI | Cocok untuk: Melepaskan emosi, workout, motivasi",
-        'rindu': "🎵 **Nuansa:** ROMANTIS | Cocok untuk: Momen kenangan, LDR, nostalgia",
-        'kecewa': "🎵 **Nuansa:** KEKECEWAAN | Cocok untuk: Cerita pengkhianatan, move on",
-        'Netral/Tidak Terdeteksi': "🎵 **Nuansa:** NETRAL | Emosi tidak terdeteksi jelas, mungkin lagu instrumental atau lexicon perlu diperluas"
-    }
-    
-    st.info(interpretasi.get(hasil['dominant'], interpretasi['Netral/Tidak Terdeteksi']))
-    
-    # Compare dengan Hint
-    if st.session_state.get('current_hint'):
+    # Validasi
+    if st.session_state.get('current_emotion'):
         st.markdown("---")
-        st.markdown("### 🎯 Validasi Hasil")
-        
-        if hasil['dominant'] == st.session_state.current_hint:
-            st.success(f"✅ **HASIL SESUAI!** Emosi terdeteksi ({hasil['dominant']}) cocok dengan label lagu ({st.session_state.current_hint})")
+        st.markdown("### 🎯 Validasi")
+        if hasil['dominant'] == st.session_state.current_emotion:
+            st.success(f"✅ **SESUAI!** Terdeteksi: {hasil['dominant']} = Label: {st.session_state.current_emotion}")
         else:
-            st.warning(f"⚠️ **HASIL BERBEDA!** Terdeteksi: {hasil['dominant']}, Label: {st.session_state.current_hint}")
-            st.info("Ini bisa terjadi karena lexicon perlu penyesuaian atau lagu memiliki emosi campuran")
+            st.warning(f"⚠️ **BERBEDA!** Terdeteksi: {hasil['dominant']}, Label: {st.session_state.current_emotion}")
     
-    # Reset Button
+    # Reset
     st.markdown("---")
-    col1, col2, col3 = st.columns([1, 2, 1])
-    with col2:
-        if st.button("🔄 Pilih Lagu Lain", use_container_width=True):
-            st.session_state.analyzed = False
-            st.session_state.hasil = None
-            st.rerun()
+    if st.button("🔄 Reset"):
+        st.session_state.analyzed = False
+        st.session_state.hasil = None
+        st.rerun()
 
 # Footer
 st.markdown("---")
 st.markdown("""
 <center>
-<b>🎵 Auto Lyric Emotion Analyzer - Skripsi S1 Ilmu Komputer</b><br>
+<b>🎵 Lyric Emotion Analyzer - Skripsi S1 Ilmu Komputer</b><br>
 Metode: Lexicon-Based Sentiment Analysis | Built with Streamlit & Python<br><br>
-<i>⚠️ Sample lagu untuk tujuan EDUKASI & DEMO skripsi saja</i>
+<i>⚠️ Lirik diinput manual karena file audio tidak menyimpan teks lirik</i><br>
+<i>🔮 Future Work: Integrasi Speech-to-Text API untuk auto-extraction</i>
 </center>
 """, unsafe_allow_html=True)
